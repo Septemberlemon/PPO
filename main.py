@@ -9,18 +9,19 @@ import wandb
 from models import Actor, Critic
 
 
+env_name = "LunarLander-v3"
 test_name = "PPO"
 gamma = 0.99
 gae_lambda = 0.95
 actor_learning_rate = 0.0005
 critic_learning_rate = 0.001
-iterations = 200
-batch_size = 4000
-k_epochs = 10
-mini_batch_size = 128
+iterations = 100
+n_steps = 4000
+n_epochs = 10
+batch_size = 128
 clip_range = 0.2
 
-env = gym.make("LunarLander-v3")
+env = gym.make(env_name)
 
 actor = Actor(env.observation_space.shape[0], env.action_space.n).to("cuda")
 critic = Critic(env.observation_space.shape[0]).to("cuda")
@@ -28,13 +29,13 @@ critic = Critic(env.observation_space.shape[0]).to("cuda")
 actor_optimizer = torch.optim.Adam(actor.parameters(), lr=actor_learning_rate)
 critic_optimizer = torch.optim.Adam(critic.parameters(), lr=critic_learning_rate)
 
-wandb.init(project="LunarLander-v3", name=test_name)
+wandb.init(project=env_name, name=test_name)
 
 
-def sample():
+def rollout():
     trajectories = []
     total_steps = 0
-    while total_steps < batch_size:
+    while total_steps < n_steps:
         obs, info = env.reset()
         observations = [obs]
         log_probs = []
@@ -91,10 +92,11 @@ def sample():
     return trajectories
 
 
-def learn(trajectories):
+def learn(trajectories, entropy_coef):
     observations, log_probs, actions, returns, GAEs = (torch.cat(data) for data in zip(*trajectories))
-    for epoch in range(k_epochs):
-        sampler = BatchSampler(SubsetRandomSampler(range(actions.shape[0])), mini_batch_size, True)
+    GAEs = (GAEs - GAEs.mean()) / (GAEs.std() + 1e-8)
+    for epoch in range(n_epochs):
+        sampler = BatchSampler(SubsetRandomSampler(range(actions.shape[0])), batch_size, True)
         total_critic_loss = 0
         total_actor_loss = 0
         for indices in sampler:
@@ -115,10 +117,14 @@ def learn(trajectories):
             total_critic_loss += critic_loss.item()
             total_actor_loss += actor_loss.item()
 
+            actor_loss -= entropy_coef * dist.entropy().mean()
+
             critic_optimizer.zero_grad()
             actor_optimizer.zero_grad()
             critic_loss.backward()
             actor_loss.backward()
+            torch.nn.utils.clip_grad_norm_(critic.parameters(), 1)
+            torch.nn.utils.clip_grad_norm_(actor.parameters(), 1)
             critic_optimizer.step()
             actor_optimizer.step()
 
@@ -132,8 +138,8 @@ def learn(trajectories):
 if __name__ == "__main__":
     for iteration in range(iterations):
         print(f"Iteration: {iteration}")
-        trajectories = sample()
-        learn(trajectories)
+        trajectories = rollout()
+        learn(trajectories, entropy_coef=0.01 * (1 - iteration / iterations))
 
     env.close()
     wandb.finish()
