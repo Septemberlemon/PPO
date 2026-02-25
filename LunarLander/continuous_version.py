@@ -1,32 +1,35 @@
 import numpy as np
 import torch
-from torch.distributions.categorical import Categorical
+from torch.distributions import Normal
 import torch.nn.functional as F
 from torch.utils.data import BatchSampler, SubsetRandomSampler
 import gymnasium as gym
 import wandb
 
-from models import Actor, Critic
+from models import ContinuousActor, Critic
 
 
 env_name = "LunarLander-v3"
-test_name = "PPO"
+test_name = "PPO_continuous"
 gamma = 0.99
 gae_lambda = 0.95
 actor_learning_rate = 0.0005
 critic_learning_rate = 0.001
-iterations = 100
-n_steps = 4000
+iterations = 200
+n_steps = 5000
 n_epochs = 10
 batch_size = 128
 clip_range = 0.2
 
-env = gym.make(env_name)
+env = gym.make(env_name, continuous=True)
 
 state_dim = env.observation_space.shape[0]
-action_dim = env.action_space.n
-actor = Actor(state_dim, action_dim).to("cuda")
+action_dim = env.action_space.shape[0]
+actor = ContinuousActor(state_dim, action_dim).to("cuda")
 critic = Critic(state_dim).to("cuda")
+
+# actor.load_state_dict(torch.load("checkpoints/PPO_continuous_actor.pth"))
+# critic.load_state_dict(torch.load("checkpoints/PPO_continuous_critic.pth"))
 
 actor_optimizer = torch.optim.Adam(actor.parameters(), lr=actor_learning_rate)
 critic_optimizer = torch.optim.Adam(critic.parameters(), lr=critic_learning_rate)
@@ -40,19 +43,19 @@ def rollout():
     while total_steps < n_steps:
         obs, info = env.reset()
         observations = [obs]
-        log_probs = []
+        log_prob_densities = []
         rewards = []
         actions = []
 
         with torch.no_grad():
             while True:
                 obs_tensor = torch.from_numpy(obs).to("cuda")
-                logits = actor(obs_tensor)
-                dist = Categorical(logits=logits)
+                mu, std = actor(obs_tensor)
+                dist = Normal(mu, std)
                 action = dist.sample()
-                obs, reward, terminated, truncated, info = env.step(action.item())
+                obs, reward, terminated, truncated, info = env.step(torch.clamp(action.detach(), -1, 1).cpu().numpy())
                 observations.append(obs)
-                log_probs.append(dist.log_prob(action))
+                log_prob_densities.append(dist.log_prob(action))
                 actions.append(action)
                 rewards.append(reward)
 
@@ -62,7 +65,7 @@ def rollout():
                     break
 
             observations = torch.from_numpy(np.stack(observations)).to("cuda")
-            log_probs = torch.stack(log_probs)
+            log_prob_densities = torch.stack(log_prob_densities)
             actions = torch.stack(actions)
             rewards = torch.tensor(rewards, dtype=torch.float32).to("cuda")
 
@@ -85,7 +88,7 @@ def rollout():
             returns.reverse()
             returns = torch.stack(returns)
         observations = observations[:-1]
-        trajectories.append((observations, log_probs, actions, returns, gaes))
+        trajectories.append((observations, log_prob_densities, actions, returns, gaes))
         print(f"steps: {actions.shape[0]}")
         print(f"reward: {rewards.sum().item()}")
         wandb.log({
@@ -96,7 +99,7 @@ def rollout():
 
 
 def learn(trajectories, entropy_coef):
-    observations, log_probs, actions, returns, gaes = (torch.cat(data) for data in zip(*trajectories))
+    observations, log_prob_densities, actions, returns, gaes = (torch.cat(data) for data in zip(*trajectories))
     gaes = (gaes - gaes.mean()) / (gaes.std() + 1e-8)
     for epoch in range(n_epochs):
         sampler = BatchSampler(SubsetRandomSampler(range(actions.shape[0])), batch_size, False)
@@ -104,16 +107,16 @@ def learn(trajectories, entropy_coef):
         total_actor_loss = 0
         for indices in sampler:
             mb_observations = observations[indices]
-            mb_log_probs = log_probs[indices]
+            mb_log_prob_densities = log_prob_densities[indices]
             mb_actions = actions[indices]
             mb_returns = returns[indices]
             mb_gaes = gaes[indices]
 
             critic_loss = F.mse_loss(critic(mb_observations), mb_returns)
 
-            logits = actor(mb_observations)
-            dist = Categorical(logits=logits)
-            ratio = torch.exp(dist.log_prob(mb_actions) - mb_log_probs)
+            mu, std = actor(mb_observations)
+            dist = Normal(mu, std)
+            ratio = torch.exp((dist.log_prob(mb_actions) - mb_log_prob_densities).sum(dim=1))
             actor_loss = - torch.mean(torch.min(ratio * mb_gaes, torch.clamp(ratio, 1.0 - clip_range, 1.0 + clip_range) * mb_gaes))
 
             total_critic_loss += critic_loss.item()
@@ -141,7 +144,7 @@ if __name__ == "__main__":
     for iteration in range(iterations):
         print(f"Iteration: {iteration}")
         trajectories = rollout()
-        learn(trajectories, entropy_coef=0.01 * (1 - iteration / iterations) * 0)
+        learn(trajectories, entropy_coef=0 * (1 - 2 * iteration // iterations) * (1 - 2 * iteration / iterations))
 
     env.close()
     wandb.finish()
