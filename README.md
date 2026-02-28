@@ -178,6 +178,11 @@ $$
 &=\sum_\tau P_{old}(\tau)\left[\prod_{t=0}^{T-1}\frac{\pi_\theta(a_t|s_t)}{\pi_{old}(a_t|s_t)}\right]\left[\sum_{t=0}^{T-1}\gamma^t \hat{A}_t^{GAE} \nabla_\theta \ln \pi_\theta(a_t|s_t)\right]\\
 &=\mathbb{E}_{\tau \sim \pi_{old}}\left[\prod_{t=0}^{T-1}\frac{\pi_\theta(a_t|s_t)}{\pi_{old}(a_t|s_t)}\right]\left[\sum_{t=0}^{T-1}\gamma^t \hat{A}_t^{GAE} \nabla_\theta \ln \pi_\theta(a_t|s_t)\right]\\
 &=\mathbb{E}_{\tau \sim \pi_{old}}\left[\sum_{t=0}^{T-1}\gamma^t \hat{A}_t^{GAE} \nabla_\theta \ln \pi_\theta(a_t|s_t)\left[\prod_{t=0}^{T-1}\frac{\pi_\theta(a_t|s_t)}{\pi_{old}(a_t|s_t)}\right]\right]\\
+\end{align}
+$$
+
+$$
+\begin{align}
 &=\mathbb{E}_{\tau \sim \pi_{old}}\left[\sum_{t=0}^{T-1}\gamma^t \hat{A}_t^{GAE} \nabla_\theta \ln \pi_\theta(a_t|s_t)\left[\prod_{k=0}^{T-1}\frac{\pi_\theta(a_k|s_k)}{\pi_{old}(a_k|s_k)}\right]\right]\\
 &=\mathbb{E}_{\tau \sim \pi_{old}}\left[\sum_{t=0}^{T-1}\gamma^t \hat{A}_t^{GAE} \nabla_\theta \ln \pi_\theta(a_t|s_t)\left[\prod_{k=0}^{t-1}\frac{\pi_\theta(a_k|s_k)}{\pi_{old}(a_k|s_k)}\right]\frac{\pi_\theta(a_t|s_t)}{\pi_{old}(a_t|s_t)}\left[\prod_{k=t+1}^{T-1}\frac{\pi_\theta(a_k|s_k)}{\pi_{old}(a_k|s_k)}\right]\right]\\
 &=\mathbb{E}_{\tau \sim \pi_{old}}\left[\sum_{t=0}^{T-1}\gamma^t \hat{A}_t^{GAE} \frac{\nabla_\theta \pi_\theta(a_t|s_t)}{\pi_\theta(a_t|s_t)}\left[\prod_{k=0}^{t-1}\frac{\pi_\theta(a_k|s_k)}{\pi_{old}(a_k|s_k)}\right]\frac{\pi_\theta(a_t|s_t)}{\pi_{old}(a_t|s_t)}\left[\prod_{k=t+1}^{T-1}\frac{\pi_\theta(a_k|s_k)}{\pi_{old}(a_k|s_k)}\right]\right]\\
@@ -194,13 +199,13 @@ $$
 \end{align}
 $$
 
-其中的 $\frac{\pi_\theta(a_t|s_t)}{\pi_{old}(a_t|s_t)}$ 被称作**ratio**，记作$r_t(\theta)$，则有：
+其中的 $\frac{\pi_\theta(a_t|s_t)}{\pi_{old}(a_t|s_t)}$ 被称作**ratio**，记作 $r_t(\theta)$ ，则有：
 
 $$
 \nabla_\theta J(\theta) \approx \nabla_\theta \left(\mathbb{E}_{\tau \sim \pi_{old}}\left[\sum_{t=0}^{T-1}\gamma^t r_t(\theta)\hat{A}_t^{GAE}\right]\right)
 $$
 
-括号内的部分被称作**代理目标函数**，一般记作 $L^{CPI}(\theta)$ ，其中的CPI是**保守策略迭代（Conservative Policy Iteration）**的缩写：
+括号内的部分被称作**代理目标函数**，一般记作 $L^{CPI}(\theta)$ ，其中的CPI是 **保守策略迭代（Conservative Policy Iteration）** 的缩写：
 
 $$
 L^{CPI}(\theta)=\mathbb{E}_{\tau \sim \pi_{old}}\left[\sum_{t=0}^{T-1}\gamma^t r_t(\theta)\hat{A}_t^{GAE}\right]
@@ -217,7 +222,7 @@ $$
 当**ratio**处于范围之外时进行截断，这意味着梯度为**0**，将不再进行更新，这就一定程度上保证了新策略的更新幅度维持较小，除此之外，**PPO**还会进行一个额外的**min**操作：
 
 $$
-L^{CLIP}(\theta)=\mathbb{E}_{\tau \sim \pi_{old}}\left[\sum_{t=0}^{T-1}\gamma^t \min (r_t(\theta)\hat{A}_t^{GAE} ,\operatorname{clip}(r_t (\theta),1-\epsilon,1+\epsilon)\hat{A}_t^{GAE})\right]
+L^{CLIP}(\theta)=\mathbb{E}_{\tau \sim \pi_{old}}\left[\sum_{t=0}^{T-1}\gamma^t \min (r_t(\theta)\hat{A}_t^{GAE} ,\mathrm{clip}(r_t (\theta),1-\epsilon,1+\epsilon)\hat{A}_t^{GAE})\right]
 $$
 
 **min**和**clip**两个操作的组合产生的效果可以进行分类讨论，总的来说：
@@ -234,6 +239,6 @@ $$
 
 一般来说**PPO**会拿当前策略采取一定量的样本，然后用样本进行学习，这两步合称一个**iteration**，**PPO**总共训练若干个**iteration**。
 
-在采样阶段，需要根据当前策略计算好**GAE**的值供学习时使用，另外，还需要计算**critic**的目标值（这一般被称作**return**），具体值为**GAE**加上$V(s_t)$，这也将在学习阶段被使用
+在采样阶段，需要根据当前策略计算好**GAE**的值供学习时使用，另外，还需要计算**critic**的目标值（这一般被称作**return**），具体值为**GAE**加上 $V(s_t)$ ，这也将在学习阶段被使用
 
 在学习阶段，会重复进行多个**epoch**，在每个**epoch**内，一批一批从样本中取子集进行学习，直到遍历完整个样本集。对于取出的一批样本，根据采样阶段算得得**GAE**和**return**，分别进行**actor**和**critic**的学习
