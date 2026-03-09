@@ -248,10 +248,13 @@ $$
 #### critic的target的无偏证明
 
 由前文及**公式（4）**可知使用**GAE**时**critic**的**target**为：
+
 $$
 r(t)+\sum_{n=1}^\infty (\lambda\gamma)^n [(\frac{1}{\lambda}-1) V(s_{t+n})+r(t+n)]
 $$
+
 下面证明它在期望下与真实价值函数相等：
+
 $$
 \begin{align}
 &\mathbb{E}\left[r(t)+\sum_{n=1}^\infty (\lambda\gamma)^n [(\frac{1}{\lambda}-1) V(s_{t+n})+r(t+n)]\right]\\
