@@ -147,8 +147,8 @@ $$
 =&\sum_{n=1}^\infty (\lambda\gamma)^{n-1} \gamma V(s_{t+n})-\sum_{n=0}^\infty (\lambda\gamma)^n V(s_{t+n})+\sum_{n=0}^\infty (\lambda\gamma)^n r(t+n)\\
 =&\sum_{n=1}^\infty (\lambda\gamma)^{n-1} \gamma V(s_{t+n})-\sum_{n=1}^\infty (\lambda\gamma)^n V(s_{t+n})+\sum_{n=1}^\infty (\lambda\gamma)^n r(t+n)-V(s_t)+r(t)\\
 =&\sum_{n=1}^\infty \frac{(\lambda\gamma)^n}{\lambda} V(s_{t+n})-\sum_{n=1}^\infty (\lambda\gamma)^n V(s_{t+n})+\sum_{n=1}^\infty (\lambda\gamma)^n r(t+n)-V(s_t)+r(t)\\
-=&\sum_{n=1}^\infty (\lambda\gamma)^n [(\frac{1}{\lambda}-1) V(s_{t+n})+r(t+n)]-V(s_t)+r(t)\\
-\end{align}
+=&\sum_{n=1}^\infty (\lambda\gamma)^n [(\frac{1}{\lambda}-1) V(s_{t+n})+r(t+n)]-V(s_t)+r(t)\qquad \qquad (5)\\
+\end{align}\
 $$
 
 从上式可以看出， $\lambda$ 越大， $V$ 所占的比例就越小，偏差越小，方差越大；反之 $V$ 所占的比例就越大，偏差越大，方差越小
@@ -156,7 +156,7 @@ $$
 对于**公式（4）**，其一般记为：
 
 $$
-\nabla_\theta J(\theta)=\mathbb{E}_{\tau \sim \pi_\theta} \left[\sum_{t=0}^{T-1}\gamma^t \hat{A}_t^{GAE} \nabla_\theta \ln \pi_\theta(a_t|s_t)\right]\qquad \qquad (5)
+\nabla_\theta J(\theta)=\mathbb{E}_{\tau \sim \pi_\theta} \left[\sum_{t=0}^{T-1}\gamma^t \hat{A}_t^{GAE} \nabla_\theta \ln \pi_\theta(a_t|s_t)\right]\qquad \qquad (6)
 $$
 
 ***
@@ -165,7 +165,7 @@ $$
 
 **重要性采样（Importance Sampling）** 旨在利用旧网络采来的轨迹进行新网络上的学习，进而大幅提升样本利用率，具体来说，**PPO**会先用当前策略采集一批轨迹，然后在这批轨迹上进行多次学习，在第二次及之后的学习时，当前网络已经不同于采样时的网络，梯度自然也不一样
 
-由 **公式（5）** 有：
+由 **公式（6）** 有：
 
 $$
 \begin{align}
@@ -242,3 +242,27 @@ $$
 在采样阶段，需要根据当前策略计算好**GAE**的值供学习时使用，另外，还需要计算**critic**的目标值（这一般被称作**return**），具体值为**GAE**加上 $V(s_t)$ ，这也将在学习阶段被使用
 
 在学习阶段，会重复进行多个**epoch**，在每个**epoch**内，一批一批从样本中取子集进行学习，直到遍历完整个样本集。对于取出的一批样本，根据采样阶段算得得**GAE**和**return**，分别进行**actor**和**critic**的学习
+
+***
+
+#### critic的target的无偏证明
+
+由前文及**公式（4）**可知使用**GAE**时**critic**的**target**为：
+$$
+r(t)+\sum_{n=1}^\infty (\lambda\gamma)^n [(\frac{1}{\lambda}-1) V(s_{t+n})+r(t+n)]
+$$
+下面证明它在期望下与真实价值函数相等：
+$$
+\begin{align}
+&\mathbb{E}\left[r(t)+\sum_{n=1}^\infty (\lambda\gamma)^n [(\frac{1}{\lambda}-1) V(s_{t+n})+r(t+n)]\right]\\
+=&\mathbb{E}[r(t)]+\sum_{n=1}^\infty (\lambda\gamma)^n \left[\mathbb{E}[(\frac{1}{\lambda}-1) V(s_{t+n})]+\mathbb{E}[r(t+n)]\right]\\
+=&\mathbb{E}[r(t)]+\sum_{n=1}^\infty (\lambda\gamma)^n \left[\mathbb{E}[(\frac{1}{\lambda}-1) V(s_{t+n})]+\mathbb{E}[V(s_{t+n})-\gamma V(s_{t+n+1})]\right]\\
+=&\mathbb{E}[r(t)]+\sum_{n=1}^\infty (\lambda\gamma)^n \left[\mathbb{E}[(\frac{1}{\lambda}-1) V(s_{t+n})]+\mathbb{E}[V(s_{t+n})-\gamma V(s_{t+n+1})]\right]\\
+=&\mathbb{E}[r(t)]+\sum_{n=1}^\infty (\lambda\gamma)^n \left[\mathbb{E}[\frac{1}{\lambda} V(s_{t+n})]-\mathbb{E}[\gamma V(s_{t+n+1})]\right]\\
+=&\mathbb{E}[r(t)]+\sum_{n=1}^\infty (\lambda\gamma)^n \mathbb{E}[\frac{1}{\lambda} V(s_{t+n})]-\sum_{n=1}^\infty (\lambda\gamma)^n \mathbb{E}[\gamma V(s_{t+n+1})]\\
+=&\mathbb{E}[r(t)]+\sum_{n=1}^\infty (\lambda\gamma)^n \mathbb{E}[\frac{1}{\lambda} V(s_{t+n})]-\sum_{n=2}^\infty (\lambda\gamma)^{n-1} \mathbb{E}[\gamma V(s_{t+n})]\\
+=&\mathbb{E}[r(t)]+\sum_{n=1}^\infty \lambda^{n-1}\gamma^n \mathbb{E}[ V(s_{t+n})]-\sum_{n=2}^\infty \lambda^{n-1}\gamma^n \mathbb{E}[V(s_{t+n})]\\
+=&\mathbb{E}[r(t)]+\gamma \mathbb{E}[V(s_{t+1})]\\
+=&\mathbb{E}[V(s_t)]\\
+\end{align}
+$$
