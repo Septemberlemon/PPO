@@ -1,4 +1,5 @@
 import pickle
+import os
 
 import gymnasium as gym
 import torch
@@ -6,6 +7,8 @@ from torch.distributions import Categorical, Normal
 
 from models import Actor  # 确保 model.py 在同一目录下
 
+
+os.environ["MUJOCO_GL"] = "egl"
 
 # 配置
 env_name = "Ant-v5"

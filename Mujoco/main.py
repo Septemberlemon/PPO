@@ -14,11 +14,11 @@ from RunningMeanStd import RunningMeanStd
 
 env_name = "Ant-v5"
 test_name = "PPO"
-gamma = 0.99
-gae_lambda = 0.95
+gamma = 0.5
+gae_lambda = 0.9
 actor_learning_rate = 0.00005
 critic_learning_rate = 0.0001
-iterations = 200
+iterations = 1000
 n_steps = 5000
 n_epochs = 10
 batch_size = 128
@@ -36,14 +36,26 @@ critic = Critic(state_dim, [256, 256]).to("cuda")
 
 # actor.load_state_dict(torch.load(f"checkpoints/{env_name}/PPO_actor.pth"))
 # critic.load_state_dict(torch.load(f"checkpoints/{env_name}/PPO_critic.pth"))
+# with open(f"checkpoints/{env_name}/PPO_rms.pkl", "rb") as f:
+#     running_mean_std = pickle.load(f)
 
 actor_optimizer = torch.optim.Adam(actor.parameters(), lr=actor_learning_rate)
 critic_optimizer = torch.optim.Adam(critic.parameters(), lr=critic_learning_rate)
+
+actor_scheduler = torch.optim.lr_scheduler.StepLR(actor_optimizer, step_size=100, gamma=0.5)
+critic_scheduler = torch.optim.lr_scheduler.StepLR(critic_optimizer, step_size=100, gamma=0.5)
 
 wandb.init(project=env_name, name=test_name)
 
 
 def rollout():
+    global gamma, gae_lambda
+    gamma *= 1.01
+    if gamma > 0.99:
+        gamma = 0.99
+    # gae_lambda *= 1.05
+    # if gae_lambda > 0.95:
+    #     gae_lambda = 0.95
     trajectories = []
     total_steps = 0
     while total_steps < n_steps:
@@ -154,8 +166,14 @@ if __name__ == "__main__":
     for iteration in range(iterations):
         print(f"Iteration: {iteration}")
         trajectories = rollout()
+        if iteration > 200:
+            entropy_coef = 0
+        else:
+            entropy_coef = 0.1 * (200 - iteration) / 200
         learn(trajectories,
-              entropy_coef=0.01 * (1 - iteration / iterations))
+              entropy_coef=entropy_coef)
+        actor_scheduler.step()
+        critic_scheduler.step()
 
     env.close()
     wandb.finish()

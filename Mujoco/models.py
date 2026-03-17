@@ -14,12 +14,12 @@ class Actor(nn.Module):
         for i in range(len(hidden_dim) - 1):
             self.network.append(nn.Linear(hidden_dim[i], hidden_dim[i + 1]))
             self.network.append(nn.ReLU())
-        self.network.append(nn.Linear(hidden_dim[-1], action_dim * 2))
-        self.log_std = nn.Parameter(torch.zeros(action_dim))
+        self.network.append(nn.Linear(hidden_dim[-1], 2 * action_dim))
+        # self.log_std = nn.Parameter(torch.zeros(action_dim))
 
     def forward(self, x):
-        mu = self.network(x)
-        std = torch.exp(self.log_std)
+        mu, log_std = torch.chunk(self.network(x), 2, dim=-1)
+        std = torch.clamp(torch.exp(log_std), -5, 3)
         return mu, std
 
 
@@ -198,3 +198,27 @@ class KvCache:
         if not self.kv_cache:
             return 0
         return self.kv_cache[0][0].size(2)
+
+
+class Reward(nn.Module):
+    def __init__(self):
+        super(Reward, self).__init__()
+
+    def forward(self, reward):
+        pass
+
+
+class Dynamics(nn.Module):
+    def __init__(self):
+        super(Dynamics, self).__init__()
+
+    def forward(self, dynamics):
+        pass
+
+
+class RepresentationModel(nn.Module):
+    def __init__(self):
+        super(RepresentationModel, self).__init__()
+
+    def forward(self, representation):
+        pass

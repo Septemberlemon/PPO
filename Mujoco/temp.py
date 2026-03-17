@@ -34,8 +34,8 @@ running_mean_std = RunningMeanStd(state_dim)
 actor = Actor(state_dim, action_dim, [256, 256]).to("cuda")
 critic = Critic(state_dim, [256, 256]).to("cuda")
 
-actor.load_state_dict(torch.load(f"checkpoints/{env_name}/PPO_actor.pth"))
-critic.load_state_dict(torch.load(f"checkpoints/{env_name}/PPO_critic.pth"))
+# actor.load_state_dict(torch.load(f"checkpoints/{env_name}/PPO_actor.pth"))
+# critic.load_state_dict(torch.load(f"checkpoints/{env_name}/PPO_critic.pth"))
 with open(f"checkpoints/{env_name}/PPO_rms.pkl", "rb") as f:
     running_mean_std = pickle.load(f)
 
@@ -85,9 +85,9 @@ def rollout():
             returns = []
             values = critic(observations)
             trajectory_length = actions.shape[0]
-            for i in range(trajectory_length - 1, -1, -10):
+            for i in range(trajectory_length - 1, -1, -5):
                 gae = torch.zeros([], device="cuda")
-                for j in range(10):
+                for j in range(5):
                     if i - j < 0:
                         break
                     td_target = rewards[i - j].clone()
